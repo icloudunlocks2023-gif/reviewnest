@@ -1,0 +1,6 @@
+{
+  "name": "ReviewNest",
+  "description": "A modern review marketplace connecting business owners with quality reviewers, featuring analytics, secure campaigns, and withdrawal tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
