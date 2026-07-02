@@ -399,21 +399,13 @@ export const ReviewerDashboard: React.FC = () => {
       }
 
       const amountVal = parseFloat(withdrawAmount);
-      const ok = requestWithdrawal(amountVal, selectedMethod, detailsString, destData);
-      if (ok) {
+      const newWithdrawalId = requestWithdrawal(amountVal, selectedMethod, detailsString, destData);
+      if (newWithdrawalId) {
         setWithdrawSuccess(true);
         setWithdrawAmount('');
         setDestData({});
         setWithdrawStep(1);
-        
-        // Auto-select the newly created request so they are directly shown the Step 4 payment details
-        setTimeout(() => {
-          const fresh = [...withdrawals].sort((a,b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
-          const latest = fresh.find(w => w.userId === currentUser.id);
-          if (latest) {
-            setSelectedWithdrawalId(latest.id);
-          }
-        }, 100);
+        setSelectedWithdrawalId(newWithdrawalId);
       } else {
         setWithdrawError('An error occurred during transaction routing.');
       }
@@ -581,18 +573,6 @@ export const ReviewerDashboard: React.FC = () => {
         >
           <CreditCard className="w-3.5 h-3.5" />
           Earnings Withdrawal
-        </button>
-        <button
-          id="tab-referrals"
-          onClick={() => setActiveTab('referrals')}
-          className={`px-4 py-2.5 text-xs font-bold transition-all border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-            activeTab === 'referrals'
-              ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-indigo-50/40 dark:bg-slate-900/40'
-              : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
-          }`}
-        >
-          <ArrowUpRight className="w-3.5 h-3.5" />
-          Referral Network
         </button>
         <button
           id="tab-achievements"
@@ -950,19 +930,7 @@ export const ReviewerDashboard: React.FC = () => {
                       />
                     </div>
                   </div>
-                  
-                  <div className="pt-2 border-t border-slate-800 flex justify-between items-center">
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">Referral Balance</span>
-                      <span className="font-bold text-slate-100 font-mono">${(currentUser.referralBalance || 0).toFixed(2)}</span>
-                    </div>
-                    <button
-                      onClick={() => setActiveTab('referrals')}
-                      className="px-2.5 py-1 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-lg text-[10px] cursor-pointer"
-                    >
-                      View Network
-                    </button>
-                  </div>
+
                 </div>
               </div>
             </div>
@@ -1900,166 +1868,7 @@ export const ReviewerDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 3: Referral Program */}
-        {activeTab === 'referrals' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
-            
-            {/* Left 2 columns: Refer and Transfer Balance */}
-            <div className="lg:col-span-2 space-y-8">
-              
-              {/* Inviter invite system */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-6 shadow-sm">
-                <h3 className="text-lg font-bold font-display text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-                  <ArrowUpRight className="w-5 h-5 text-indigo-500" />
-                  Multi-Level Affiliate Network
-                </h3>
-                <p className="text-xs text-slate-500 mb-6">
-                  Refer business owners and reviewers. Earn lifetime compound commissions across three network depths!
-                </p>
 
-                <form 
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (!referEmail.trim()) return;
-                    referUser(referEmail.trim());
-                    setReferEmail('');
-                  }} 
-                  className="space-y-4"
-                >
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
-                      Invite Friend Email Address
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        id="referral-email-input"
-                        type="email"
-                        required
-                        placeholder="colleague.email@example.com"
-                        value={referEmail}
-                        onChange={(e) => setReferEmail(e.target.value)}
-                        className="flex-grow px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-sm"
-                      />
-                      <button
-                        type="submit"
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-1 cursor-pointer"
-                      >
-                        Send Invitation
-                      </button>
-                    </div>
-                    <span className="block text-[10px] text-slate-400 mt-1">
-                      This registers their account under your direct network branch (Level 1 tier).
-                    </span>
-                  </div>
-                </form>
-
-                {/* Referral Link displays */}
-                <div className="mt-6 p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 space-y-2">
-                  <span className="block text-[10px] text-slate-400 uppercase tracking-wider font-extrabold">Your Unique Affiliate Tracking Code</span>
-                  <div className="flex items-center justify-between gap-2 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
-                    <span className="font-mono text-xs font-bold text-slate-600 dark:text-slate-300">
-                      {currentUser.fullName.toUpperCase().replace(/\s+/g, '')}-{currentUser.id.substring(0, 5)}
-                    </span>
-                    <span className="text-[10px] text-indigo-500 font-bold uppercase">Active Tracker</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Commission Balance & Transfer */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-6 shadow-sm">
-                <h3 className="text-lg font-bold font-display text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-                  <Wallet className="w-5 h-5 text-emerald-500" />
-                  Separate Affiliate Commissions Ledger
-                </h3>
-                <p className="text-xs text-slate-500 mb-6">
-                  Referral balances accumulate here safely. You can immediately transfer this into your main withdrawable balance instantly.
-                </p>
-
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl gap-4 mb-6">
-                  <div>
-                    <span className="text-[10px] uppercase text-slate-400 font-semibold block">Affiliate Vault Balance</span>
-                    <span className="text-3xl font-black text-slate-900 dark:text-white font-mono">${(currentUser.referralBalance || 0).toFixed(2)}</span>
-                  </div>
-                  <button
-                    onClick={() => {
-                      if ((currentUser.referralBalance || 0) <= 0) {
-                        alert("Your referral balance is zero!");
-                        return;
-                      }
-                      transferReferralBalance();
-                    }}
-                    disabled={(currentUser.referralBalance || 0) <= 0}
-                    className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      (currentUser.referralBalance || 0) > 0
-                        ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/10'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
-                    }`}
-                  >
-                    Transfer to Main Wallet
-                  </button>
-                </div>
-
-                {/* Multi level tier structure diagram */}
-                <div className="space-y-3">
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Compound Commission Rates</h4>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="p-3 border border-slate-100 dark:border-slate-800 rounded-xl text-center">
-                      <span className="block text-[10px] font-semibold text-slate-400">Level 1 Direct</span>
-                      <span className="text-lg font-black text-indigo-500 font-mono">10%</span>
-                      <span className="block text-[9px] text-slate-400 mt-1">Directly invited friends</span>
-                    </div>
-                    <div className="p-3 border border-slate-100 dark:border-slate-800 rounded-xl text-center">
-                      <span className="block text-[10px] font-semibold text-slate-400">Level 2 Indirect</span>
-                      <span className="text-lg font-black text-violet-500 font-mono">5%</span>
-                      <span className="block text-[9px] text-slate-400 mt-1">Invited by Level 1s</span>
-                    </div>
-                    <div className="p-3 border border-slate-100 dark:border-slate-800 rounded-xl text-center">
-                      <span className="block text-[10px] font-semibold text-slate-400">Level 3 Depth</span>
-                      <span className="text-lg font-black text-emerald-500 font-mono">2%</span>
-                      <span className="block text-[9px] text-slate-400 mt-1">Invited by Level 2s</span>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-
-            </div>
-
-            {/* Right 1 column: Referral Network List */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-6 shadow-sm h-fit">
-              <h3 className="text-sm font-bold font-display text-slate-900 dark:text-white mb-4">
-                Active Referrals Ledger
-              </h3>
-              
-              {(!storeReferrals || storeReferrals.filter(r => r.referrerId === currentUser.id).length === 0) ? (
-                <div className="p-6 text-center text-slate-400">
-                  <User className="w-8 h-8 text-slate-300 dark:text-slate-700 mx-auto mb-2" />
-                  <p className="text-[11px] font-medium">No registered affiliate members yet.</p>
-                  <p className="text-[9px] text-slate-400/80 mt-1">Invite friends above to start tracking real-time commission chains.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {storeReferrals.filter(r => r.referrerId === currentUser.id).map(r => (
-                    <div 
-                      key={r.id} 
-                      className="p-3 rounded-xl border border-slate-50 dark:border-slate-950 bg-slate-50/50 dark:bg-slate-950/20 text-xs flex justify-between items-center"
-                    >
-                      <div>
-                        <span className="font-bold text-slate-900 dark:text-white block">{r.referredEmail}</span>
-                        <span className="text-[9px] text-slate-400 block font-mono">Tier level: {r.level === 1 ? 'Direct L1 (10%)' : r.level === 2 ? 'L2 Depth (5%)' : 'L3 Depth (2%)'}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs font-bold text-indigo-500 font-mono block">+${r.commissionEarned.toFixed(2)}</span>
-                        <span className="text-[8px] text-slate-400 font-mono">{new Date(r.createdAt).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-          </div>
-        )}
 
         {/* TAB 4: Daily Check-in & Badges achievements */}
         {activeTab === 'achievements' && (

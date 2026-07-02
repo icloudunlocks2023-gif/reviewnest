@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, Business, Campaign, ReviewJob, WithdrawalRequest, SecurityLog, UserRole, AccountLevel, CampaignPackage, Referral, Notification, DepositRequest } from '../types';
 import { INITIAL_USERS, INITIAL_BUSINESSES, INITIAL_CAMPAIGNS, INITIAL_REVIEWS, INITIAL_WITHDRAWALS } from '../initialData';
+import { saveDoc, saveCollection, loadCollection } from './firebaseSync';
 
 interface StoreContextType {
   currentUser: User | null;
@@ -24,7 +25,7 @@ interface StoreContextType {
   createCampaign: (businessId: string, reviewsNeeded: number, rewardPerReview: number, description: string, durationDays?: number) => boolean;
   submitReview: (campaignId: string, rating: number, content: string, feedback: string) => void;
   approveReview: (reviewId: string, status: 'approved' | 'rejected') => void;
-  requestWithdrawal: (amount: number, paymentMethod: string, details: string, destinationDetails?: Record<string, string>) => boolean;
+  requestWithdrawal: (amount: number, paymentMethod: string, details: string, destinationDetails?: Record<string, string>) => string | null;
   approveWithdrawal: (id: string, status: 'pending' | 'awaiting_tax_payment' | 'tax_received' | 'processing' | 'paid' | 'rejected') => void;
   updateWithdrawalFeePayment: (id: string, feePaymentStatus: 'unpaid' | 'verifying' | 'verified' | 'failed', reference?: string) => void;
   cancelWithdrawal: (id: string, reason?: string) => void;
@@ -96,142 +97,234 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } as Record<string, string>
   });
 
-  // Load initial data
+  // Load initial data from Firestore or local state fallback
   useEffect(() => {
-    const localUsers = localStorage.getItem('rh_users');
-    const localBusinesses = localStorage.getItem('rh_businesses');
-    const localCampaigns = localStorage.getItem('rh_campaigns');
-    const localReviews = localStorage.getItem('rh_reviews');
-    const localWithdrawals = localStorage.getItem('rh_withdrawals');
-    const localLogs = localStorage.getItem('rh_logs');
-    const localTheme = localStorage.getItem('rh_theme');
-    const localUser = localStorage.getItem('rh_currentUser');
-    const localPackages = localStorage.getItem('rh_campaign_packages');
-    const localReferrals = localStorage.getItem('rh_referrals');
-    const localNotifications = localStorage.getItem('rh_notifications');
-    const localSettings = localStorage.getItem('rh_withdrawal_settings');
-    const localDepositRequests = localStorage.getItem('rh_deposit_requests');
+    const bootstrapFirebase = async () => {
+      try {
+        console.log("Syncing with Firestore database...");
+        
+        // Load collections from Firestore
+        const dbUsers = await loadCollection('users');
+        const dbBusinesses = await loadCollection('businesses');
+        const dbCampaigns = await loadCollection('campaigns');
+        const dbReviews = await loadCollection('reviews');
+        const dbWithdrawals = await loadCollection('withdrawals');
+        const dbLogs = await loadCollection('logs');
+        const dbReferrals = await loadCollection('referrals');
+        const dbNotifications = await loadCollection('notifications');
+        const dbDepositRequests = await loadCollection('deposit_requests');
+        const dbSettings = await loadCollection('settings');
 
-    if (localSettings) {
-      setWithdrawalSettings(JSON.parse(localSettings));
-    }
+        // Local storage fallbacks
+        const localTheme = localStorage.getItem('rh_theme');
+        const localUser = localStorage.getItem('rh_currentUser');
 
-    // Parse users and populate additional fields
-    let initialUsers = localUsers ? JSON.parse(localUsers) : INITIAL_USERS;
-    initialUsers = initialUsers.map((u: any, idx: number) => {
-      const uCopy = { ...u };
-      if (uCopy.referralBalance === undefined) {
-        uCopy.referralBalance = uCopy.id === 'u-reviewer-1' ? 45.00 : 0.00;
+        // Let's determine users list
+        let finalUsers = dbUsers;
+        if (finalUsers.length === 0) {
+          const localUsers = localStorage.getItem('rh_users');
+          let initialUsers = localUsers ? JSON.parse(localUsers) : INITIAL_USERS;
+          initialUsers = initialUsers.map((u: any) => {
+            const uCopy = { ...u };
+            if (uCopy.referralBalance === undefined) {
+              uCopy.referralBalance = uCopy.id === 'u-reviewer-1' ? 45.00 : 0.00;
+            }
+            if (uCopy.invitedBy === undefined && uCopy.id === 'u-reviewer-1') {
+              uCopy.invitedBy = 'u-admin-1';
+            }
+            if (uCopy.xp === undefined) {
+              uCopy.xp = uCopy.id === 'u-reviewer-1' ? 120 : 0;
+            }
+            if (uCopy.badges === undefined) {
+              uCopy.badges = uCopy.id === 'u-reviewer-1' ? ['First Review', 'Quality Contributor'] : [];
+            }
+            return uCopy;
+          });
+          finalUsers = initialUsers;
+          await saveCollection('users', finalUsers);
+        }
+        setUsers(finalUsers);
+
+        // Businesses
+        let finalBusinesses = dbBusinesses;
+        if (finalBusinesses.length === 0) {
+          const localBusinesses = localStorage.getItem('rh_businesses');
+          finalBusinesses = localBusinesses ? JSON.parse(localBusinesses) : INITIAL_BUSINESSES;
+          await saveCollection('businesses', finalBusinesses);
+        }
+        setBusinesses(finalBusinesses);
+
+        // Campaigns
+        let finalCampaigns = dbCampaigns;
+        if (finalCampaigns.length === 0) {
+          const localCampaigns = localStorage.getItem('rh_campaigns');
+          finalCampaigns = localCampaigns ? JSON.parse(localCampaigns) : INITIAL_CAMPAIGNS;
+          await saveCollection('campaigns', finalCampaigns);
+        }
+        setCampaigns(finalCampaigns);
+
+        // Reviews
+        let finalReviews = dbReviews;
+        if (finalReviews.length === 0) {
+          const localReviews = localStorage.getItem('rh_reviews');
+          finalReviews = localReviews ? JSON.parse(localReviews) : INITIAL_REVIEWS;
+          await saveCollection('reviews', finalReviews);
+        }
+        setReviews(finalReviews);
+
+        // Withdrawals
+        let finalWithdrawals = dbWithdrawals;
+        if (finalWithdrawals.length === 0) {
+          const localWithdrawals = localStorage.getItem('rh_withdrawals');
+          let parsedWithdrawals = localWithdrawals ? JSON.parse(localWithdrawals) : INITIAL_WITHDRAWALS;
+          parsedWithdrawals = parsedWithdrawals.map((w: any) => {
+            return {
+              ...w,
+              paymentMethod: w.paymentMethod === 'paypal' || w.paymentMethod === 'crypto' ? 'usdt_trc20' : w.paymentMethod,
+              fee: w.fee !== undefined ? w.fee : w.amount * 0.12,
+              amountReceived: w.amountReceived !== undefined ? w.amountReceived : w.amount * 0.88,
+              status: w.status === 'approved' ? 'paid' : w.status
+            };
+          });
+          finalWithdrawals = parsedWithdrawals;
+          await saveCollection('withdrawals', finalWithdrawals);
+        }
+        setWithdrawals(finalWithdrawals);
+
+        // Logs
+        let finalLogs = dbLogs;
+        if (finalLogs.length === 0) {
+          const localLogs = localStorage.getItem('rh_logs');
+          finalLogs = localLogs ? JSON.parse(localLogs) : [
+            { id: 'l-1', userId: 'system', action: 'System initialized', ipAddress: '127.0.0.1', timestamp: new Date().toISOString() }
+          ];
+          await saveCollection('logs', finalLogs);
+        }
+        setLogs(finalLogs);
+
+        // Referrals
+        let finalReferrals = dbReferrals;
+        if (finalReferrals.length === 0) {
+          const localReferrals = localStorage.getItem('rh_referrals');
+          const defaultReferrals: Referral[] = [
+            {
+              id: 'ref-1',
+              inviterId: 'u-admin-1',
+              invitedId: 'u-reviewer-1',
+              invitedName: 'Sarah Jenkins',
+              level: 1,
+              commissionEarned: 12.50,
+              createdAt: '2026-03-01T10:00:00Z'
+            }
+          ];
+          finalReferrals = localReferrals ? JSON.parse(localReferrals) : defaultReferrals;
+          await saveCollection('referrals', finalReferrals);
+        }
+        setReferrals(finalReferrals);
+
+        // Notifications
+        let finalNotifications = dbNotifications;
+        if (finalNotifications.length === 0) {
+          const localNotifications = localStorage.getItem('rh_notifications');
+          const defaultNotifications: Notification[] = [
+            {
+              id: 'n-1',
+              userId: 'u-reviewer-1',
+              message: 'Welcome to ReviewNest! Browse Active Campaigns to start earning.',
+              type: 'new_job',
+              read: false,
+              createdAt: new Date().toISOString()
+            },
+            {
+              id: 'n-2',
+              userId: 'u-reviewer-1',
+              message: 'Your withdrawal request of $50.00 has been processed successfully.',
+              type: 'withdrawal_status',
+              read: true,
+              createdAt: new Date().toISOString()
+            }
+          ];
+          finalNotifications = localNotifications ? JSON.parse(localNotifications) : defaultNotifications;
+          await saveCollection('notifications', finalNotifications);
+        }
+        setNotifications(finalNotifications);
+
+        // Deposit Requests
+        let finalDepositRequests = dbDepositRequests;
+        if (finalDepositRequests.length === 0) {
+          const localDepositRequests = localStorage.getItem('rh_deposit_requests');
+          const defaultDepositRequests: DepositRequest[] = [
+            {
+              id: 'dep-seed-1',
+              userId: 'u-owner-1',
+              userName: 'David Chen',
+              userEmail: 'owner@reviewhub.pro',
+              amount: 450,
+              paymentMethod: 'Bank Transfer',
+              status: 'Approved',
+              paymentDetails: 'ReviewNest Escrow LLC, Bank of America, Acct: 4819283192',
+              requestedAt: '2026-06-25T14:30:00Z',
+              adminNotes: 'Direct wire deposit verified.',
+              referenceNumber: 'DEP-REF-482103'
+            },
+            {
+              id: 'dep-seed-2',
+              userId: 'u-owner-1',
+              userName: 'David Chen',
+              userEmail: 'owner@reviewhub.pro',
+              amount: 300,
+              paymentMethod: 'PayPal',
+              status: 'Pending Review',
+              requestedAt: '2026-06-28T05:20:00Z'
+            }
+          ];
+          finalDepositRequests = localDepositRequests ? JSON.parse(localDepositRequests) : defaultDepositRequests;
+          await saveCollection('deposit_requests', finalDepositRequests);
+        }
+        setDepositRequests(finalDepositRequests);
+
+        // Settings
+        if (dbSettings.length > 0) {
+          const remoteSettings = dbSettings.find(s => s.id === 'withdrawal_settings');
+          if (remoteSettings) {
+            setWithdrawalSettings({
+              taxFlatFee: remoteSettings.taxFlatFee,
+              taxPercent: remoteSettings.taxPercent,
+              addresses: remoteSettings.addresses
+            });
+          }
+        } else {
+          // Save default settings to DB
+          await saveDoc('settings', 'withdrawal_settings', {
+            id: 'withdrawal_settings',
+            taxFlatFee: withdrawalSettings.taxFlatFee,
+            taxPercent: withdrawalSettings.taxPercent,
+            addresses: withdrawalSettings.addresses
+          });
+        }
+
+        // Current User login sync
+        if (localUser) {
+          const parsedCurr = JSON.parse(localUser);
+          const freshCurr = finalUsers.find((u: any) => u.id === parsedCurr.id);
+          setCurrentUser(freshCurr || parsedCurr);
+        }
+
+        const defaultPackages: CampaignPackage[] = [
+          { id: 'starter', name: 'Starter', reviewsCount: 50, costPerReview: 10 },
+          { id: 'growth', name: 'Growth', reviewsCount: 200, costPerReview: 8 },
+          { id: 'professional', name: 'Professional', reviewsCount: 500, costPerReview: 7 },
+          { id: 'enterprise', name: 'Enterprise', reviewsCount: 1000, costPerReview: 6 }
+        ];
+        const localPackages = localStorage.getItem('rh_campaign_packages');
+        setCampaignPackages(localPackages ? JSON.parse(localPackages) : defaultPackages);
+
+      } catch (err) {
+        console.error("Failed to load state from Firestore:", err);
       }
-      if (uCopy.invitedBy === undefined && uCopy.id === 'u-reviewer-1') {
-        uCopy.invitedBy = 'u-admin-1'; // Seed referral relationship for testing Level 1 commission
-      }
-      if (uCopy.xp === undefined) {
-        uCopy.xp = uCopy.id === 'u-reviewer-1' ? 120 : 0;
-      }
-      if (uCopy.badges === undefined) {
-        uCopy.badges = uCopy.id === 'u-reviewer-1' ? ['First Review', 'Quality Contributor'] : [];
-      }
-      return uCopy;
-    });
+    };
 
-    setUsers(initialUsers);
-    setBusinesses(localBusinesses ? JSON.parse(localBusinesses) : INITIAL_BUSINESSES);
-    setCampaigns(localCampaigns ? JSON.parse(localCampaigns) : INITIAL_CAMPAIGNS);
-    setReviews(localReviews ? JSON.parse(localReviews) : INITIAL_REVIEWS);
-
-    // Convert old withdrawals method/status to new format if needed
-    let parsedWithdrawals = localWithdrawals ? JSON.parse(localWithdrawals) : INITIAL_WITHDRAWALS;
-    parsedWithdrawals = parsedWithdrawals.map((w: any) => {
-      return {
-        ...w,
-        paymentMethod: w.paymentMethod === 'paypal' || w.paymentMethod === 'crypto' ? 'usdt_trc20' : w.paymentMethod,
-        fee: w.fee !== undefined ? w.fee : w.amount * 0.12,
-        amountReceived: w.amountReceived !== undefined ? w.amountReceived : w.amount * 0.88,
-        status: w.status === 'approved' ? 'paid' : w.status
-      };
-    });
-    setWithdrawals(parsedWithdrawals);
-
-    setLogs(localLogs ? JSON.parse(localLogs) : [
-      { id: 'l-1', userId: 'system', action: 'System initialized', ipAddress: '127.0.0.1', timestamp: new Date().toISOString() }
-    ]);
-    // Keep theme as light, ignoring dark mode if saved before
-    if (localUser) {
-      const parsedCurr = JSON.parse(localUser);
-      // Synchronize with parsed copy of that user
-      const freshCurr = initialUsers.find((u: any) => u.id === parsedCurr.id);
-      setCurrentUser(freshCurr || parsedCurr);
-    }
-
-    const defaultPackages: CampaignPackage[] = [
-      { id: 'starter', name: 'Starter', reviewsCount: 50, costPerReview: 10 },
-      { id: 'growth', name: 'Growth', reviewsCount: 200, costPerReview: 8 },
-      { id: 'professional', name: 'Professional', reviewsCount: 500, costPerReview: 7 },
-      { id: 'enterprise', name: 'Enterprise', reviewsCount: 1000, costPerReview: 6 }
-    ];
-    setCampaignPackages(localPackages ? JSON.parse(localPackages) : defaultPackages);
-
-    // Default referrals & notifications seed
-    const defaultReferrals: Referral[] = [
-      {
-        id: 'ref-1',
-        inviterId: 'u-admin-1',
-        invitedId: 'u-reviewer-1',
-        invitedName: 'Sarah Jenkins',
-        level: 1,
-        commissionEarned: 12.50,
-        createdAt: '2026-03-01T10:00:00Z'
-      }
-    ];
-    setReferrals(localReferrals ? JSON.parse(localReferrals) : defaultReferrals);
-
-    const defaultNotifications: Notification[] = [
-      {
-        id: 'n-1',
-        userId: 'u-reviewer-1',
-        message: 'Welcome to ReviewNest! Browse Active Campaigns to start earning.',
-        type: 'new_job',
-        read: false,
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 'n-2',
-        userId: 'u-reviewer-1',
-        message: 'Your withdrawal request of $50.00 has been processed successfully.',
-        type: 'withdrawal_status',
-        read: true,
-        createdAt: new Date().toISOString()
-      }
-    ];
-    setNotifications(localNotifications ? JSON.parse(localNotifications) : defaultNotifications);
-
-    const defaultDepositRequests: DepositRequest[] = [
-      {
-        id: 'dep-seed-1',
-        userId: 'u-owner-1',
-        userName: 'David Chen',
-        userEmail: 'owner@reviewhub.pro',
-        amount: 450,
-        paymentMethod: 'Bank Transfer',
-        status: 'Approved',
-        paymentDetails: 'ReviewNest Escrow LLC, Bank of America, Acct: 4819283192',
-        requestedAt: '2026-06-25T14:30:00Z',
-        adminNotes: 'Direct wire deposit verified.',
-        referenceNumber: 'DEP-REF-482103'
-      },
-      {
-        id: 'dep-seed-2',
-        userId: 'u-owner-1',
-        userName: 'David Chen',
-        userEmail: 'owner@reviewhub.pro',
-        amount: 300,
-        paymentMethod: 'PayPal',
-        status: 'Pending Review',
-        requestedAt: '2026-06-28T05:20:00Z'
-      }
-    ];
-    setDepositRequests(localDepositRequests ? JSON.parse(localDepositRequests) : defaultDepositRequests);
+    bootstrapFirebase();
   }, []);
 
   // Keep active reviewer users stocked with at least one available review job
@@ -307,14 +400,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [currentUser, campaigns, reviews]);
 
-  // Automatically cancel withdrawals in awaiting_tax_payment status for more than 10 minutes
+  // Automatically cancel withdrawals not finished within 10 minutes
   useEffect(() => {
     const checkInterval = setInterval(() => {
       const now = Date.now();
       const tenMinutesMs = 10 * 60 * 1000;
       
       const expired = withdrawals.filter(w => 
-        w.status === 'awaiting_tax_payment' && 
+        w.status !== 'paid' && 
+        w.status !== 'cancelled' && 
+        w.status !== 'rejected' && 
         (now - new Date(w.requestedAt).getTime() > tenMinutesMs)
       );
 
@@ -334,8 +429,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               status: 'cancelled' as const,
               feePaymentStatus: 'failed' as const,
               details: w.details 
-                ? `${w.details} (Cancelled: Auto-cancelled due to payment timeout - 10 minutes exceeded)` 
-                : 'Cancelled: Auto-cancelled due to payment timeout - 10 minutes exceeded'
+                ? `${w.details} (Cancelled: Auto-cancelled due to 10-minute timeout)` 
+                : 'Cancelled: Auto-cancelled due to 10-minute timeout'
             };
           }
           return w;
@@ -357,7 +452,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const statusNotif: Notification = {
             id: `n-${Date.now()}-${req.id}-autocancel`,
             userId: requester.id,
-            message: `Your withdrawal of $${req.amount.toFixed(2)} was automatically cancelled after 10 minutes of pending processing fee payment. Funds returned to wallet.`,
+            message: `Your withdrawal of $${req.amount.toFixed(2)} was automatically cancelled after 10 minutes of inactivity or pending processing fee payment. Funds returned to wallet.`,
             type: 'withdrawal_status',
             read: false,
             createdAt: new Date().toISOString()
@@ -407,7 +502,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     newWithdrawals: WithdrawalRequest[],
     newLogs?: SecurityLog[],
     newReferrals?: Referral[],
-    newNotifications?: Notification[]
+    newNotifications?: Notification[],
+    newDepositRequests?: DepositRequest[]
   ) => {
     localStorage.setItem('rh_users', JSON.stringify(newUsers));
     localStorage.setItem('rh_businesses', JSON.stringify(newBusinesses));
@@ -425,6 +521,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } else {
       localStorage.setItem('rh_notifications', JSON.stringify(notifications));
     }
+    if (newDepositRequests) {
+      localStorage.setItem('rh_deposit_requests', JSON.stringify(newDepositRequests));
+    }
+
+    // Sync to Firestore in the background
+    saveCollection('users', newUsers);
+    saveCollection('businesses', newBusinesses);
+    saveCollection('campaigns', newCampaigns);
+    saveCollection('reviews', newReviews);
+    saveCollection('withdrawals', newWithdrawals);
+    if (newLogs) saveCollection('logs', newLogs);
+    saveCollection('referrals', newReferrals || referrals);
+    saveCollection('notifications', newNotifications || notifications);
+    saveCollection('deposit_requests', newDepositRequests || depositRequests);
   };
 
   const toggleTheme = () => {
@@ -1039,7 +1149,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const updatedNotifications = [adminNotif, ...notifications];
     setNotifications(updatedNotifications);
     
-    saveState(users, businesses, campaigns, reviews, withdrawals, logs, referrals, updatedNotifications);
+    saveState(users, businesses, campaigns, reviews, withdrawals, logs, referrals, updatedNotifications, updated);
     return newReq;
   };
 
@@ -1123,7 +1233,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const updatedNotifications = [userNotif, ...notifications];
       setNotifications(updatedNotifications);
 
-      saveState(updatedUsers, businesses, campaigns, reviews, withdrawals, logs, referrals, updatedNotifications);
+      saveState(updatedUsers, businesses, campaigns, reviews, withdrawals, logs, referrals, updatedNotifications, updatedRequests);
     }
   };
 
@@ -1436,25 +1546,90 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     paymentMethod: string,
     details: string,
     destinationDetails?: Record<string, string>
-  ): boolean => {
-    if (!currentUser || currentUser.balance < amount) return false;
+  ): string | null => {
+    if (!currentUser) return null;
+
+    let updatedUser = { ...currentUser };
+    let tempWithdrawals = [...withdrawals];
+    let tempUsers = [...users];
+    let tempNotifications = [...notifications];
+
+    const pendingPrevious = tempWithdrawals.filter(w => 
+      w.userId === currentUser.id && 
+      w.status !== 'paid' && 
+      w.status !== 'cancelled' && 
+      w.status !== 'rejected'
+    );
+
+    if (pendingPrevious.length > 0) {
+      const totalRefund = pendingPrevious.reduce((sum, w) => sum + w.amount, 0);
+      
+      // Update those previous requests to cancelled
+      tempWithdrawals = tempWithdrawals.map(w => {
+        const isPendingPrev = pendingPrevious.some(p => p.id === w.id);
+        if (isPendingPrev) {
+          return {
+            ...w,
+            status: 'cancelled' as const,
+            feePaymentStatus: 'failed' as const,
+            details: w.details 
+              ? `${w.details} (Cancelled: Auto-cancelled due to a new withdrawal attempt)` 
+              : 'Cancelled: Auto-cancelled due to a new withdrawal attempt'
+          };
+        }
+        return w;
+      });
+
+      // Add security log
+      pendingPrevious.forEach(p => {
+        addSecurityLog(`Auto-cancelled previous pending withdrawal ${p.id} of $${p.amount.toFixed(2)} due to a new withdrawal attempt.`);
+        
+        const freshNotif: Notification = {
+          id: `n-${Date.now()}-${p.id}-autocancel-new`,
+          userId: currentUser.id,
+          message: `Your previous withdrawal of $${p.amount.toFixed(2)} was cancelled because you initiated a new withdrawal attempt. Funds have been returned to your balance.`,
+          type: 'withdrawal_status',
+          read: false,
+          createdAt: new Date().toISOString()
+        };
+        tempNotifications = [freshNotif, ...tempNotifications];
+      });
+
+      updatedUser = {
+        ...updatedUser,
+        balance: updatedUser.balance + totalRefund,
+        pendingWithdrawalsCount: Math.max(0, updatedUser.pendingWithdrawalsCount - pendingPrevious.length)
+      };
+    }
+
+    if (updatedUser.balance < amount) {
+      // If balance is insufficient even after refund
+      setCurrentUser(updatedUser);
+      localStorage.setItem('rh_currentUser', JSON.stringify(updatedUser));
+      const finalUsers = tempUsers.map(u => u.id === currentUser.id ? updatedUser : u);
+      setUsers(finalUsers);
+      setWithdrawals(tempWithdrawals);
+      setNotifications(tempNotifications);
+      saveState(finalUsers, businesses, campaigns, reviews, tempWithdrawals, logs, referrals, tempNotifications);
+      return null;
+    }
+
+    // Deduct immediately from updated balance, and increase pending list
+    const finalUser: User = {
+      ...updatedUser,
+      balance: updatedUser.balance - amount,
+      pendingWithdrawalsCount: updatedUser.pendingWithdrawalsCount + 1
+    };
+    setCurrentUser(finalUser);
+    localStorage.setItem('rh_currentUser', JSON.stringify(finalUser));
+
+    const finalUsers = tempUsers.map(u => u.id === currentUser.id ? finalUser : u);
+    setUsers(finalUsers);
 
     // Calculate processing tax
     const taxFlatFee = withdrawalSettings.taxFlatFee;
     const taxPercent = withdrawalSettings.taxPercent;
     const taxDue = taxFlatFee + (taxPercent / 100) * amount;
-
-    // Deduct immediately from balance, and increase pending list
-    const updatedUser: User = {
-      ...currentUser,
-      balance: currentUser.balance - amount,
-      pendingWithdrawalsCount: currentUser.pendingWithdrawalsCount + 1
-    };
-    setCurrentUser(updatedUser);
-    localStorage.setItem('rh_currentUser', JSON.stringify(updatedUser));
-
-    const updatedUsers = users.map(u => u.id === currentUser.id ? updatedUser : u);
-    setUsers(updatedUsers);
 
     const newWithdrawal: WithdrawalRequest = {
       id: `w-${Date.now()}`,
@@ -1475,8 +1650,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       feeAmountKes: Math.round(taxDue * 130)
     };
 
-    const updatedWithdrawals = [...withdrawals, newWithdrawal];
-    setWithdrawals(updatedWithdrawals);
+    const finalWithdrawals = [...tempWithdrawals, newWithdrawal];
+    setWithdrawals(finalWithdrawals);
     addSecurityLog(`Requested advanced withdrawal of $${amount.toFixed(2)} via ${paymentMethod}. Processing Tax: $${taxDue.toFixed(2)} (Awaiting payment).`);
     
     // Add real-time user notification
@@ -1488,11 +1663,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       read: false,
       createdAt: new Date().toISOString()
     };
-    const updatedNotifications = [freshNotif, ...notifications];
-    setNotifications(updatedNotifications);
+    const finalNotifications = [freshNotif, ...tempNotifications];
+    setNotifications(finalNotifications);
 
-    saveState(updatedUsers, businesses, campaigns, reviews, updatedWithdrawals, logs, referrals, updatedNotifications);
-    return true;
+    saveState(finalUsers, businesses, campaigns, reviews, finalWithdrawals, logs, referrals, finalNotifications);
+    return newWithdrawal.id;
   };
 
   const declareTaxPayment = (id: string, paymentMethod: string, referenceCode: string, amountPaid: number) => {
@@ -1558,6 +1733,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const cancelWithdrawal = (id: string, reason: string = 'Processing fee payment could not be verified.') => {
     const req = withdrawals.find(w => w.id === id);
     if (!req) return;
+    if (req.status === 'cancelled' || req.status === 'rejected' || req.status === 'paid') {
+      return;
+    }
 
     const updatedWithdrawals = withdrawals.map(w => {
       if (w.id === id) {
@@ -1615,6 +1793,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const req = withdrawals.find(w => w.id === id);
     if (!req) return;
+    if (req.status === 'cancelled' || req.status === 'rejected' || req.status === 'paid') {
+      return;
+    }
 
     const updatedWithdrawals = withdrawals.map(w => {
       if (w.id === id) {

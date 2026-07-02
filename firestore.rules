@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Permissive rules to allow the front-end to read and write records safely
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

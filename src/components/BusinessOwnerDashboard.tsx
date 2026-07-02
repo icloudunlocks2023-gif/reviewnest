@@ -533,20 +533,26 @@ export const BusinessOwnerDashboard: React.FC = () => {
                   </div>
 
                   {selectedInvoiceMethod === 'Bank Transfer' && (
-                    <div className="p-3 bg-white dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800 font-mono text-[10px] text-slate-500 leading-relaxed space-y-1">
-                      <p className="font-bold text-slate-800 dark:text-slate-300">ReviewNest Clearing Account Details:</p>
-                      <p>Bank: <strong className="text-slate-900 dark:text-white">Delaware Silicon Bank</strong></p>
-                      <p>SWIFT/BIC: <strong className="text-slate-900 dark:text-white">DSBUSS33XXX</strong></p>
-                      <p>IBAN / Account Number: <strong className="text-slate-900 dark:text-white">US89 3100 2401 5590 0001 22</strong></p>
-                      <p>Reference: <strong className="text-indigo-600 dark:text-indigo-400">RN-{currentUser.fullName.slice(0, 3).toUpperCase()}-{currentUser.id.slice(-4).toUpperCase()}</strong></p>
+                    <div className="p-3 bg-white dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800 font-sans text-xs text-slate-500 leading-relaxed space-y-2">
+                      <p className="font-bold text-slate-850 dark:text-slate-300">Bank Wire Request Protocol:</p>
+                      <p className="text-slate-600 dark:text-slate-400">
+                        To fund via Bank Transfer, please submit your desired deposit amount and sender bank wire details below.
+                      </p>
+                      <p className="text-slate-600 dark:text-slate-400">
+                        Our administrative department will review your details and send you custom, secure bank clearing details (IBAN/SWIFT) directly via <strong>notifications or email</strong>.
+                      </p>
                     </div>
                   )}
 
                   {selectedInvoiceMethod === 'PayPal Invoice' && (
-                    <div className="p-3 bg-white dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800 font-mono text-[10px] text-slate-500 leading-relaxed space-y-1">
-                      <p className="font-bold text-slate-800 dark:text-slate-300">PayPal Deposit Address:</p>
-                      <p>Send billing payment directly to: <strong className="text-indigo-600 dark:text-indigo-400">billing@reviewnest.com</strong></p>
-                      <p>Ensure payment description includes: <strong className="text-slate-950 dark:text-white">ReviewNest Campaign deposit for {currentUser.email}</strong></p>
+                    <div className="p-3 bg-white dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800 font-sans text-xs text-slate-500 leading-relaxed space-y-2">
+                      <p className="font-bold text-slate-850 dark:text-slate-300">PayPal Deposit Request Protocol:</p>
+                      <p className="text-slate-600 dark:text-slate-400">
+                        To fund via PayPal, please submit your desired deposit amount along with your registered PayPal email address below.
+                      </p>
+                      <p className="text-slate-600 dark:text-slate-400">
+                        Our billing department will issue and deliver a secure PayPal Invoice or payment link directly to your <strong>email or notification center</strong>.
+                      </p>
                     </div>
                   )}
 
@@ -560,9 +566,13 @@ export const BusinessOwnerDashboard: React.FC = () => {
                 </div>
 
                 {invoiceSuccess && (
-                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 rounded-xl font-bold font-mono flex items-center gap-1.5">
+                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 rounded-xl font-bold font-mono flex items-center gap-1.5 animate-fade-in">
                     <Check className="w-4 h-4" />
-                    ✓ Deposit Invoice request submitted successfully! An administrator will audit the clearing reference within 1 hour.
+                    {selectedInvoiceMethod === 'M-Pesa Till' ? (
+                      <span>✓ Deposit request submitted! Admin will audit the M-Pesa reference within 1 hour.</span>
+                    ) : (
+                      <span>✓ Request submitted! An administrator will review your details and send payment details via notifications or email shortly.</span>
+                    )}
                   </div>
                 )}
 
@@ -587,12 +597,20 @@ export const BusinessOwnerDashboard: React.FC = () => {
                   <div className="sm:col-span-2 flex gap-3">
                     <div className="flex-1">
                       <label className="block text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">
-                        Memo / Transaction Hash / Ref ID
+                        {selectedInvoiceMethod === 'Bank Transfer' 
+                          ? 'Your Bank Name, Account Name & Sender Details'
+                          : selectedInvoiceMethod === 'PayPal Invoice'
+                          ? 'Your PayPal Email / Billing Address'
+                          : 'Memo / Transaction Hash / Ref ID'}
                       </label>
                       <input
                         type="text"
                         required
-                        placeholder="Enter Bank wire ID, PayPal transaction code, or M-Pesa Code"
+                        placeholder={selectedInvoiceMethod === 'Bank Transfer'
+                          ? 'e.g., Chase Bank, John Doe, wire details request'
+                          : selectedInvoiceMethod === 'PayPal Invoice'
+                          ? 'e.g., payer@example.com, John Doe'
+                          : 'Enter Bank wire ID, PayPal transaction code, or M-Pesa Code'}
                         value={invoiceMemo}
                         onChange={(e) => setInvoiceMemo(e.target.value)}
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-xs text-slate-800 dark:text-slate-100 font-mono"

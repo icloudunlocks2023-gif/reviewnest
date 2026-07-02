@@ -1,0 +1,234 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile containing balances, badges, security and role details.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["reviewer", "business_owner", "admin"] },
+        "country": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "balance": { "type": "number" },
+        "totalEarnings": { "type": "number" },
+        "completedReviewsCount": { "type": "number" },
+        "pendingWithdrawalsCount": { "type": "number" },
+        "accountLevel": { "type": "string" },
+        "verified": { "type": "boolean" },
+        "twoFactorEnabled": { "type": "boolean" },
+        "suspended": { "type": "boolean" },
+        "restricted": { "type": "boolean" },
+        "restrictionNotes": { "type": "string" },
+        "invitedBy": { "type": "string" },
+        "referralBalance": { "type": "number" },
+        "lastLoginRewardClaimed": { "type": "string" },
+        "badges": { "type": "array" },
+        "xp": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "fullName", "email", "role", "balance", "totalEarnings", "createdAt"]
+    },
+    "Business": {
+      "title": "Business",
+      "description": "Business profile representing reviews campaigns launcher.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "website": { "type": "string" },
+        "description": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "ownerId", "status", "createdAt"]
+    },
+    "Campaign": {
+      "title": "Campaign",
+      "description": "Review campaigns registered by businesses.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "businessId": { "type": "string" },
+        "businessName": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "reviewsNeeded": { "type": "number" },
+        "reviewsCompleted": { "type": "number" },
+        "rewardPerReview": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "completed", "paused"] },
+        "totalBudget": { "type": "number" },
+        "durationDays": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "businessId", "reviewsNeeded", "rewardPerReview", "status", "totalBudget", "createdAt"]
+    },
+    "ReviewJob": {
+      "title": "ReviewJob",
+      "description": "Reviews submitted by reviewers for dynamic campaigns.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "campaignId": { "type": "string" },
+        "reviewerId": { "type": "string" },
+        "reviewerName": { "type": "string" },
+        "businessId": { "type": "string" },
+        "businessName": { "type": "string" },
+        "rating": { "type": "number" },
+        "content": { "type": "string" },
+        "feedback": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "rewardAmount": { "type": "number" },
+        "isSuspicious": { "type": "boolean" },
+        "submittedAt": { "type": "string" },
+        "approvedAt": { "type": "string" }
+      },
+      "required": ["id", "campaignId", "reviewerId", "rating", "content", "status", "rewardAmount", "submittedAt"]
+    },
+    "WithdrawalRequest": {
+      "title": "WithdrawalRequest",
+      "description": "Withdrawal request details and escrow-related processing tags.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "amount": { "type": "number" },
+        "fee": { "type": "number" },
+        "amountReceived": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "details": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "awaiting_tax_payment", "tax_received", "processing", "paid", "rejected", "cancelled"] },
+        "requestedAt": { "type": "string" },
+        "feePaymentStatus": { "type": "string" },
+        "feePaymentReference": { "type": "string" },
+        "feeAmountUsd": { "type": "number" },
+        "feeAmountKes": { "type": "number" },
+        "taxPaidAmount": { "type": "number" },
+        "taxPaidMethod": { "type": "string" }
+      },
+      "required": ["id", "userId", "amount", "paymentMethod", "status", "requestedAt"]
+    },
+    "DepositRequest": {
+      "title": "DepositRequest",
+      "description": "Deposit request for business campaign funding.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "status": { "type": "string" },
+        "paymentDetails": { "type": "string" },
+        "adminNotes": { "type": "string" },
+        "expiryDate": { "type": "string" },
+        "referenceNumber": { "type": "string" },
+        "requestedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "amount", "paymentMethod", "status", "requestedAt"]
+    },
+    "SecurityLog": {
+      "title": "SecurityLog",
+      "description": "System security audit trail logs.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "action": { "type": "string" },
+        "ipAddress": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "userId", "action", "timestamp"]
+    },
+    "Referral": {
+      "title": "Referral",
+      "description": "Tracks invited and inviter multi-tier commission structures.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "inviterId": { "type": "string" },
+        "invitedId": { "type": "string" },
+        "invitedName": { "type": "string" },
+        "level": { "type": "number" },
+        "commissionEarned": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "inviterId", "invitedId", "level", "commissionEarned", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "In-app notification system alerts.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "message", "type", "read", "createdAt"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global administration parameters.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "taxFlatFee": { "type": "number" },
+        "taxPercent": { "type": "number" },
+        "addresses": { "type": "object" }
+      },
+      "required": ["id", "taxFlatFee", "taxPercent", "addresses"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Profiles of reviewers, business owners, and administrators."
+    },
+    "/businesses/{businessId}": {
+      "schema": "Business",
+      "description": "Businesses details registered by clients."
+    },
+    "/campaigns/{campaignId}": {
+      "schema": "Campaign",
+      "description": "Business-funded review campaigns."
+    },
+    "/reviews/{reviewId}": {
+      "schema": "ReviewJob",
+      "description": "Critiques, ratings, and feedback."
+    },
+    "/withdrawals/{withdrawalId}": {
+      "schema": "WithdrawalRequest",
+      "description": "Processed and pending balance withdrawals."
+    },
+    "/deposit_requests/{depositId}": {
+      "schema": "DepositRequest",
+      "description": "Requests made to fund wallets."
+    },
+    "/logs/{logId}": {
+      "schema": "SecurityLog",
+      "description": "Audit and security entries."
+    },
+    "/referrals/{referralId}": {
+      "schema": "Referral",
+      "description": "Affiliates registry."
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "System alerts and notifications."
+    },
+    "/settings/{settingsId}": {
+      "schema": "Settings",
+      "description": "Global configuration variables."
+    }
+  }
+}

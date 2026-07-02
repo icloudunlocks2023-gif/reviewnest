@@ -27,6 +27,8 @@ export const PayoutPortal: React.FC = () => {
   const [destData, setDestData] = useState<Record<string, string>>({});
   const [withdrawError, setWithdrawError] = useState<string>('');
   const [withdrawSuccess, setWithdrawSuccess] = useState<boolean>(false);
+  const [showMpesaConfirm, setShowMpesaConfirm] = useState<boolean>(false);
+  const [showCryptoConfirm, setShowCryptoConfirm] = useState<boolean>(false);
   const [selectedWithdrawalId, setSelectedWithdrawalId] = useState<string | null>(null);
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
 
@@ -97,6 +99,16 @@ export const PayoutPortal: React.FC = () => {
       }
     }
   }, [selectedWithdrawalId, withdrawals, withdrawalSettings]);
+
+  // If the currently selected withdrawal is cancelled, rejected, or completed, clear selection to show the wizard
+  useEffect(() => {
+    if (selectedWithdrawalId) {
+      const w = withdrawals.find(item => item.id === selectedWithdrawalId);
+      if (!w || w.status === 'cancelled' || w.status === 'rejected' || w.status === 'paid') {
+        setSelectedWithdrawalId(null);
+      }
+    }
+  }, [selectedWithdrawalId, withdrawals]);
 
   // List of all 19 payment methods
   const instantMethods = ['M-Pesa', 'Bitcoin', 'USDT TRC20', 'USDT BEP20', 'USDT ERC20', 'Ethereum'];
@@ -173,7 +185,6 @@ export const PayoutPortal: React.FC = () => {
   const validateDestinationDetails = (): string => {
     if (instantMethods.includes(selectedMethod)) {
       if (selectedMethod === 'M-Pesa') {
-        if (!(destData.fullName || '').trim()) return 'Full registered name is required.';
         const phone = (destData.phone || '').trim();
         if (!phone) return 'M-Pesa mobile number is required.';
         if (phone.length < 9) return 'Please enter a valid mobile number.';
@@ -225,6 +236,46 @@ export const PayoutPortal: React.FC = () => {
     return '';
   };
 
+  const submitWithdrawalProcess = () => {
+    setWithdrawError('');
+    setWithdrawSuccess(false);
+
+    // Format details string for logging
+    let detailsStr = '';
+    if (selectedMethod === 'M-Pesa') {
+      detailsStr = `Phone: ${destData.phone}`;
+    } else if (instantMethods.includes(selectedMethod)) {
+      detailsStr = `Wallet Address: ${destData.walletAddress}`;
+    } else if (selectedMethod === 'Bank Transfer') {
+      detailsStr = `Bank: ${destData.bankName}, Account: ${destData.accountName} (A/C: ${destData.accountNumber}, SWIFT: ${destData.swiftCode})`;
+    } else if (['PayPal', 'Skrill', 'Neteller', 'Wise'].includes(selectedMethod)) {
+      detailsStr = `Email: ${destData.email}`;
+    } else if (selectedMethod === 'Payoneer') {
+      detailsStr = `Payoneer ID: ${destData.payoneerId}`;
+    } else if (['Western Union', 'MoneyGram'].includes(selectedMethod)) {
+      detailsStr = `Recipient: ${destData.fullName}, Country: ${destData.country}, Phone: ${destData.phone}`;
+    } else if (['Visa', 'Mastercard'].includes(selectedMethod)) {
+      detailsStr = `Cardholder: ${destData.cardholderName}, Card: **** **** **** ${destData.cardNumber?.slice(-4) || 'xxxx'}, Expiry: ${destData.expiryDate}`;
+    } else if (selectedMethod === 'Binance Pay') {
+      detailsStr = `Binance Pay ID: ${destData.binanceId}`;
+    } else if (selectedMethod === 'Perfect Money') {
+      detailsStr = `Perfect Money A/C: ${destData.pmAccount}`;
+    } else if (selectedMethod === 'AdvCash') {
+      detailsStr = `AdvCash: ${destData.advAccount}`;
+    }
+
+    const newWithdrawalId = requestWithdrawal(amountVal, selectedMethod, detailsStr, destData);
+    if (newWithdrawalId) {
+      setWithdrawSuccess(true);
+      setWithdrawAmount('');
+      setDestData({});
+      setWithdrawStep(1);
+      setSelectedWithdrawalId(newWithdrawalId);
+    } else {
+      setWithdrawError('Transaction routing failed. Please verify your balance and try again.');
+    }
+  };
+
   const handleNextStep = () => {
     setWithdrawError('');
     setWithdrawSuccess(false);
@@ -262,48 +313,17 @@ export const PayoutPortal: React.FC = () => {
         return;
       }
 
-      // Format details string for logging
-      let detailsStr = '';
       if (selectedMethod === 'M-Pesa') {
-        detailsStr = `Name: ${destData.fullName}, Phone: ${destData.phone}`;
-      } else if (instantMethods.includes(selectedMethod)) {
-        detailsStr = `Wallet Address: ${destData.walletAddress}`;
-      } else if (selectedMethod === 'Bank Transfer') {
-        detailsStr = `Bank: ${destData.bankName}, Account: ${destData.accountName} (A/C: ${destData.accountNumber}, SWIFT: ${destData.swiftCode})`;
-      } else if (['PayPal', 'Skrill', 'Neteller', 'Wise'].includes(selectedMethod)) {
-        detailsStr = `Email: ${destData.email}`;
-      } else if (selectedMethod === 'Payoneer') {
-        detailsStr = `Payoneer ID: ${destData.payoneerId}`;
-      } else if (['Western Union', 'MoneyGram'].includes(selectedMethod)) {
-        detailsStr = `Recipient: ${destData.fullName}, Country: ${destData.country}, Phone: ${destData.phone}`;
-      } else if (['Visa', 'Mastercard'].includes(selectedMethod)) {
-        detailsStr = `Cardholder: ${destData.cardholderName}, Card: **** **** **** ${destData.cardNumber?.slice(-4) || 'xxxx'}, Expiry: ${destData.expiryDate}`;
-      } else if (selectedMethod === 'Binance Pay') {
-        detailsStr = `Binance Pay ID: ${destData.binanceId}`;
-      } else if (selectedMethod === 'Perfect Money') {
-        detailsStr = `Perfect Money A/C: ${destData.pmAccount}`;
-      } else if (selectedMethod === 'AdvCash') {
-        detailsStr = `AdvCash: ${destData.advAccount}`;
+        setShowMpesaConfirm(true);
+        return;
       }
 
-      const ok = requestWithdrawal(amountVal, selectedMethod, detailsStr, destData);
-      if (ok) {
-        setWithdrawSuccess(true);
-        setWithdrawAmount('');
-        setDestData({});
-        setWithdrawStep(1);
-
-        // Auto-select newly created request in the ledger to show step 4 directly
-        setTimeout(() => {
-          const fresh = [...withdrawals].sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
-          const latest = fresh.find(w => w.userId === currentUser.id);
-          if (latest) {
-            setSelectedWithdrawalId(latest.id);
-          }
-        }, 120);
-      } else {
-        setWithdrawError('Transaction routing failed. Please verify your balance and try again.');
+      if (instantMethods.includes(selectedMethod) && selectedMethod !== 'M-Pesa') {
+        setShowCryptoConfirm(true);
+        return;
       }
+
+      submitWithdrawalProcess();
     }
   };
 
@@ -1139,16 +1159,6 @@ export const PayoutPortal: React.FC = () => {
                   {selectedMethod === 'M-Pesa' ? (
                     <>
                       <div className="space-y-2">
-                        <label className="block text-[10px] font-extrabold uppercase text-slate-400">Full Registered Name</label>
-                        <input
-                          type="text"
-                          placeholder="Legal full name registered on M-Pesa"
-                          value={destData.fullName || ''}
-                          onChange={(e) => setDestData({ ...destData, fullName: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
-                      <div className="space-y-2">
                         <label className="block text-[10px] font-extrabold uppercase text-slate-400">Safaricom Mobile Number</label>
                         <input
                           type="tel"
@@ -1157,6 +1167,9 @@ export const PayoutPortal: React.FC = () => {
                           onChange={(e) => setDestData({ ...destData, phone: e.target.value })}
                           className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-indigo-500"
                         />
+                      </div>
+                      <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 text-xs leading-relaxed">
+                        <strong>Important:</strong> Please ensure you enter the correct M-Pesa phone number. Your withdrawal will be sent to the number you provide. Once the payment has been processed, it cannot be reversed or redirected. ReviewNest is not responsible for payments sent to an incorrect phone number entered by the user.
                       </div>
                     </>
                   ) : instantMethods.includes(selectedMethod) ? (
@@ -1174,6 +1187,9 @@ export const PayoutPortal: React.FC = () => {
                       <div className="p-3 bg-indigo-500/5 rounded-xl text-[10px] text-indigo-500 font-bold flex items-center gap-2">
                         <Info className="w-4 h-4" />
                         <span>Network Required: {selectedMethod === 'Bitcoin' ? 'BTC Mainnet' : selectedMethod === 'USDT TRC20' ? 'TRON Network (TRC-20)' : selectedMethod === 'USDT BEP20' ? 'Binance Smart Chain (BEP-20)' : 'Ethereum Network (ERC-20)'}</span>
+                      </div>
+                      <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 text-xs leading-relaxed">
+                        <strong>Important:</strong> Please ensure you enter the correct wallet address and select the correct network. Cryptocurrency transactions are irreversible. ReviewNest is not responsible for funds sent to an incorrect wallet address or the wrong blockchain network entered by the user.
                       </div>
                     </>
                   ) : selectedMethod === 'Bank Transfer' ? (
@@ -1406,156 +1422,117 @@ export const PayoutPortal: React.FC = () => {
           </div>
         </div>
 
-        {/* Ledger List */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-3xl p-6 shadow-sm space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
-              <FileText className="w-4 h-4 text-indigo-500" />
-              Settlement Ledger
-            </h3>
-            
-            {selectedWithdrawalId && (
-              <button 
-                id="btn_new_request_top"
-                onClick={() => {
-                  setSelectedWithdrawalId(null);
-                  setWithdrawStep(1);
-                  setTaxSuccess(false);
-                  setTaxError('');
-                }}
-                className="text-[10px] font-extrabold text-indigo-500 hover:text-indigo-600 flex items-center gap-1"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>New Request</span>
-              </button>
-            )}
-          </div>
 
-          <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed">
-            Click on any request below to view its 6-stage compliance routing, processing instructions, or declare fee payments.
-          </p>
+      </div>
 
-          <div className="space-y-3 max-h-[450px] overflow-y-auto pr-1">
-            {withdrawals.filter(w => w.userId === currentUser.id).length === 0 ? (
-              <div className="py-8 text-center text-slate-400 dark:text-slate-600 text-xs font-medium border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
-                No past withdrawals registered.
+      {/* M-Pesa Phone Number Confirmation Modal */}
+      {showMpesaConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6 text-slate-850 dark:text-slate-200">
+            <div className="flex items-center gap-3 text-indigo-500">
+              <Smartphone className="w-6 h-6 animate-pulse" />
+              <h3 className="text-lg font-bold font-display text-slate-900 dark:text-white">
+                Verify M-Pesa Number
+              </h3>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Before we route your compliance clearing and release your payment, please confirm that your Safaricom M-Pesa phone number is absolutely correct:
+              </p>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/85 text-center space-y-1">
+                <span className="block text-[10px] text-slate-400 uppercase tracking-wider font-extrabold">Destination Number</span>
+                <span className="block text-2xl font-black font-mono text-slate-900 dark:text-white tracking-wider">
+                  {destData.phone}
+                </span>
               </div>
-            ) : (
-              [...withdrawals]
-                .filter(w => w.userId === currentUser.id)
-                .sort((a,b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())
-                .map(w => {
-                  const isSelected = selectedWithdrawalId === w.id;
-                  const c = getStatusConfig(w.status);
-                  const Icon = c.icon;
-                  return (
-                    <div
-                      key={w.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => {
-                        setSelectedWithdrawalId(w.id);
-                        setTaxSuccess(false);
-                        setTaxError('');
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          setSelectedWithdrawalId(w.id);
-                          setTaxSuccess(false);
-                          setTaxError('');
-                        }
-                      }}
-                      className={`w-full p-4 rounded-2xl border text-left cursor-pointer transition-all flex flex-col gap-3 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 ${
-                        isSelected
-                          ? 'border-indigo-500 bg-indigo-500/5 shadow-md shadow-indigo-500/5 ring-1 ring-indigo-500'
-                          : 'border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 hover:border-slate-200 dark:hover:border-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-950/30'
-                      }`}
-                    >
-                      {/* Top line */}
-                      <div className="flex justify-between items-start w-full">
-                        <div>
-                          <span className="block text-[10px] text-slate-400 dark:text-slate-500 font-mono font-bold uppercase">
-                            {new Date(w.requestedAt).toLocaleDateString()}
-                          </span>
-                          <span className="block text-xs font-extrabold text-slate-800 dark:text-slate-100 mt-0.5">
-                            {w.paymentMethod}
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <span className="block text-xs font-bold text-slate-900 dark:text-white font-mono">
-                            ${w.amount.toFixed(2)}
-                          </span>
-                          <span className="block text-[9px] text-indigo-500 font-mono mt-0.5">
-                            Fee: ${w.fee.toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
 
-                      {/* Status indicator */}
-                      <div className="flex justify-between items-center w-full pt-1.5 border-t border-slate-100/50 dark:border-slate-800/50">
-                        <span className="text-[9px] text-slate-400 dark:text-slate-500 truncate max-w-[120px] font-mono">
-                          Ref: {w.id}
-                        </span>
-                        
-                        <div className="flex items-center gap-1.5">
-                          {w.status === 'awaiting_tax_payment' && (
-                            <div className="flex items-center gap-1.5">
-                              {confirmCancelId === w.id ? (
-                                <div className="flex items-center gap-1 bg-rose-500/5 border border-rose-500/20 px-2 py-1 rounded-lg animate-fade-in">
-                                  <span className="text-[8px] text-rose-500 font-bold mr-1">Confirm cancel?</span>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      cancelWithdrawal(w.id);
-                                      if (selectedWithdrawalId === w.id) {
-                                        setSelectedWithdrawalId(null);
-                                      }
-                                      setConfirmCancelId(null);
-                                    }}
-                                    className="px-1.5 py-0.5 bg-rose-500 hover:bg-rose-600 text-white text-[8px] font-black rounded-md transition-all cursor-pointer"
-                                  >
-                                    Yes
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setConfirmCancelId(null);
-                                    }}
-                                    className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-400 text-[8px] font-bold rounded-md transition-all cursor-pointer"
-                                  >
-                                    No
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setConfirmCancelId(w.id);
-                                  }}
-                                  className="px-2 py-0.5 border border-rose-200 dark:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-[9px] font-bold text-rose-500 rounded-lg transition-all cursor-pointer"
-                                >
-                                  Cancel
-                                </button>
-                              )}
-                            </div>
-                          )}
-                          
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-${c.color}-500/10 text-${c.color}-500 ${c.pulse ? 'animate-pulse' : ''}`}>
-                            <Icon className={`w-3 h-3 ${c.spin ? 'animate-spin' : ''}`} />
-                            {c.label}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-            )}
+              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 text-xs leading-relaxed">
+                <strong>Important:</strong> Please ensure you enter the correct M-Pesa phone number. Your withdrawal will be sent to the number you provide. Once the payment has been processed, it cannot be reversed or redirected. ReviewNest is not responsible for payments sent to an incorrect phone number entered by the user.
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowMpesaConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-950/50 cursor-pointer text-center"
+              >
+                Edit Number
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMpesaConfirm(false);
+                  submitWithdrawalProcess();
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold shadow-lg shadow-indigo-500/10 cursor-pointer text-center"
+              >
+                Confirm & Continue
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Crypto Wallet Address Confirmation Modal */}
+      {showCryptoConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6 text-slate-850 dark:text-slate-200">
+            <div className="flex items-center gap-3 text-indigo-500">
+              <Coins className="w-6 h-6 animate-pulse" />
+              <h3 className="text-lg font-bold font-display text-slate-900 dark:text-white">
+                Verify Wallet Address
+              </h3>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Before we process your cryptocurrency payout, please carefully verify your destination address and network. Incorrect information will result in permanent loss of funds:
+              </p>
+
+              <div className="space-y-3">
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/85 text-center space-y-1">
+                  <span className="block text-[10px] text-slate-400 uppercase tracking-wider font-extrabold">Destination Address ({selectedMethod})</span>
+                  <span className="block text-sm font-bold font-mono text-slate-900 dark:text-white break-all tracking-tight">
+                    {destData.walletAddress}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-indigo-500/5 rounded-xl text-[10px] text-indigo-500 font-bold flex items-center justify-center gap-2">
+                  <Info className="w-4 h-4" />
+                  <span className="text-center">Network Required: {selectedMethod === 'Bitcoin' ? 'BTC Mainnet' : selectedMethod === 'USDT TRC20' ? 'TRON Network (TRC-20)' : selectedMethod === 'USDT BEP20' ? 'Binance Smart Chain (BEP-20)' : 'Ethereum Network (ERC-20)'}</span>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 text-xs leading-relaxed">
+                <strong>Important:</strong> Please ensure you enter the correct wallet address and select the correct network. Cryptocurrency transactions are irreversible. ReviewNest is not responsible for funds sent to an incorrect wallet address or the wrong blockchain network entered by the user.
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowCryptoConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-950/50 cursor-pointer text-center"
+              >
+                Edit Wallet Address
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCryptoConfirm(false);
+                  submitWithdrawalProcess();
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold shadow-lg shadow-indigo-500/10 cursor-pointer text-center"
+              >
+                Confirm & Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Automated Verification Modal */}
       {isVerifying && (
